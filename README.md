@@ -47,11 +47,11 @@ Para desplegar el entorno en una instalación limpia o en el **Modo Live (Prueba
 ### Opción A: Despliegue en Ubuntu
 
 ```bash
-cd ~/Downloads && curl -L "https://githubusercontent.com/rauldiazsolis/mi-entorno-linux/main/ubuntu/instalar.sh" -o instalar.sh && chmod +x instalar.sh && ./instalar.sh
+cd ~/Downloads && wget "https://githubusercontent.com/rauldiazsolis/mi-entorno-linux/main/ubuntu/instalar.sh" -o instalar.sh && chmod +x instalar.sh && ./instalar.sh
 ```
 
 ### Opción B: Despliegue en Linux Mint
 
 ```bash
-cd ~/Downloads && curl -L "https://githubusercontent.com/rauldiazsolis/mi-entorno-linux/main/mint/instalar.sh" -o instalar.sh && chmod +x instalar.sh && ./instalar.sh
+cd ~/Downloads && wget "https://githubusercontent.com/rauldiazsolis/mi-entorno-linux/main/mint/instalar.sh" -o instalar.sh && chmod +x instalar.sh && ./instalar.sh
 ```
