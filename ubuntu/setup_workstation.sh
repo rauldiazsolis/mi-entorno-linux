@@ -68,8 +68,10 @@ install_system_core() {
     # Oh My Zsh para el usuario final
     if [[ ! -d "$TARGET_HOME/.oh-my-zsh" ]]; then
         log_info "Instalando Oh My Zsh para $TARGET_USER..."
-        sudo -u "$TARGET_USER" sh -c \
-            'sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" "" --unattended'
+        local omz_installer="/tmp/install_omz.sh"
+        curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh -o "$omz_installer"
+        sudo -u "$TARGET_USER" sh "$omz_installer" --unattended
+        rm -f "$omz_installer"
         
         # Configurar starship en .zshrc si no está presente
         if ! grep -q 'starship init zsh' "$TARGET_HOME/.zshrc" 2>/dev/null; then
