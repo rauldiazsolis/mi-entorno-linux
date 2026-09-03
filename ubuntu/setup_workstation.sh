@@ -162,6 +162,53 @@ install_system_core() {
     log_success "Bloque 1 completado con éxito."
 }
 
+# ------------------------------------------------------------------------------
+# Bloque 3: Docker
+# ------------------------------------------------------------------------------
+install_docker_engine() {
+    if command -v docker &>/dev/null; then
+        log_info "Docker Engine ya está instalado. Omitiendo..."
+    else
+        log_info "Configurando repositorio oficial de Docker..."
+        install -m 0755 -d /etc/apt/keyrings
+
+        # Descarga de clave GPG de Docker
+        if [[ ! -f /etc/apt/keyrings/docker.asc ]]; then
+            curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
+            chmod a+r /etc/apt/keyrings/docker.asc
+        fi
+
+        # Agregar repositorio oficial firmado por la clave
+        local arch codename
+        arch=$(dpkg --print-architecture)
+        codename=$(. /etc/os-release && echo "$VERSION_CODENAME")
+
+        echo "deb [arch=${arch} signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu ${codename} stable" \
+            > /etc/apt/sources.list.d/docker.list
+
+        apt-get update -y
+        log_info "Instalando Docker Engine, CLI, Containerd y Plugins..."
+        apt-get install -y --no-install-recommends \
+            docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+
+        log_success "Docker Engine instalado correctamente."
+    fi
+
+    # Configuración de permisos sin sudo para el usuario
+    if ! id -nG "$TARGET_USER" | grep -qw "docker"; then
+        log_info "Añadiendo a $TARGET_USER al grupo 'docker'..."
+        usermod -aG docker "$TARGET_USER"
+        log_success "Usuario $TARGET_USER añadido al grupo docker."
+    else
+        log_info "El usuario $TARGET_USER ya pertenece al grupo docker."
+    fi
+
+    # Habilitar y verificar el servicio
+    systemctl enable docker.service
+    systemctl start docker.service
+    log_success "Servicio Docker activo y habilitado."
+}
+
 main() {
     log_info "Iniciando aprovisionamiento del entorno..."
     
@@ -170,6 +217,9 @@ main() {
 
     # 2. Setup base del sistema
     install_system_core
+
+    # 3. Setup base del sistema
+    install_docker_engine
 
     log_success "Fase inicial completada con éxito."
 }
