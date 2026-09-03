@@ -47,7 +47,13 @@ Para desplegar el entorno en una instalación limpia o en el **Modo Live (Prueba
 ### Opción A: Despliegue en Ubuntu
 
 ```bash
-cd ~/Downloads && wget "https://githubusercontent.com/rauldiazsolis/mi-entorno-linux/main/ubuntu/instalar.sh" -o instalar.sh && chmod +x instalar.sh && ./instalar.sh
+wget -qO- https://raw.githubusercontent.com/rauldiazsolis/mi-entorno-linux/main/ubuntu/setup_workstation.sh | sudo bash
+```
+o
+```bash
+wget https://raw.githubusercontent.com/rauldiazsolis/mi-entorno-linux/main/ubuntu/setup_workstation.sh
+chmod +x setup_workstation.sh
+sudo ./setup_workstation.sh
 ```
 
 ### Opción B: Despliegue en Linux Mint
