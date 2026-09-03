@@ -40,11 +40,13 @@ Los scripts de este repositorio **no deben parametrizarse con datos fijos de com
 
 ---
 
-## 🚀 4. Guía de Ejecución Rápida (Sistemas en Inglés)
+## 🚀 4. Guía de Ejecución Rápida
 
 Para desplegar el entorno en una instalación limpia o en el **Modo Live (Pruebas)**, abre la terminal y ejecuta:
 
-### Opción A: Despliegue en Ubuntu
+### Despliegue en Ubuntu
+
+#### Setup Workstation
 
 ```bash
 wget -qO- https://raw.githubusercontent.com/rauldiazsolis/mi-entorno-linux/main/ubuntu/setup_workstation.sh | sudo bash
@@ -56,8 +58,10 @@ chmod +x setup_workstation.sh
 sudo ./setup_workstation.sh
 ```
 
-### Opción B: Despliegue en Linux Mint
+#### Reset System
 
 ```bash
-cd ~/Downloads && wget "https://githubusercontent.com/rauldiazsolis/mi-entorno-linux/main/mint/instalar.sh" -o instalar.sh && chmod +x instalar.sh && ./instalar.sh
+wget -qO- https://raw.githubusercontent.com/rauldiazsolis/mi-entorno-linux/main/ubuntu/reset_system.sh | sudo bash
 ```
+
+
