@@ -69,7 +69,7 @@ install_system_core() {
     if [[ ! -d "$TARGET_HOME/.oh-my-zsh" ]]; then
         log_info "Instalando Oh My Zsh para $TARGET_USER..."
         sudo -u "$TARGET_USER" sh -c \
-            '$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh) "" --unattended'
+            'sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" "" --unattended'
         
         # Configurar starship en .zshrc si no está presente
         if ! grep -q 'starship init zsh' "$TARGET_HOME/.zshrc" 2>/dev/null; then
@@ -77,6 +77,8 @@ install_system_core() {
             chown "$TARGET_USER:$TARGET_USER" "$TARGET_HOME/.zshrc"
         fi
         log_success "Oh My Zsh y Starship configurados para $TARGET_USER."
+    else
+        log_info "Oh My Zsh ya está presente. Omitiendo..."
     fi
 
     # Configurar Zsh como shell predeterminado si aún no lo es
@@ -90,8 +92,6 @@ install_system_core() {
         chsh -s "$zsh_path" "$TARGET_USER"
         log_success "Shell predeterminado actualizado a Zsh."
     fi
-
-    log_success "Bloque 1 completado con éxito."
 }
 
 # ------------------------------------------------------------------------------
