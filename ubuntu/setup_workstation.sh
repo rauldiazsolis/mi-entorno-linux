@@ -48,7 +48,7 @@ check_gpu_and_ollama_preference() {
         return 0
     fi
 
-    # 2. Comprobar si el módulo privativo de NVIDIA ya está funcional
+    # 2. Comprobar si el driver privativo ya está activo
     if command -v nvidia-smi &>/dev/null && nvidia-smi &>/dev/null; then
         log_success "GPU NVIDIA detectada y controladores funcionando correctamente."
         echo "OLLAMA_ENABLED=true" >> "$STATE_FILE"
@@ -60,7 +60,10 @@ check_gpu_and_ollama_preference() {
     log_warn "Se detectó una GPU NVIDIA, pero los controladores oficiales no están activos (ej. nouveau en uso)."
     echo ""
     echo "Para que Ollama funcione con aceleración por hardware es necesario instalar los drivers privativos y reiniciar."
-    read -rp "¿Deseas instalar los controladores privativos recomendados ahora? [s/N]: " choice
+    
+    # Leer directamente de /dev/tty para funcionar dentro de 'wget | bash'
+    local choice
+    read -rp "¿Deseas instalar los controladores privativos recomendados ahora? [s/N]: " choice </dev/tty
     echo ""
 
     case "$choice" in
@@ -68,12 +71,13 @@ check_gpu_and_ollama_preference() {
             log_info "Instalando controladores recomendados mediante ubuntu-drivers..."
             ubuntu-drivers install
             log_warn "Los controladores han sido instalados. Es obligatorio reiniciar el sistema."
-            log_warn "Por favor, reinicia con 'sudo reboot' y vuelve a ejecutar este script."
+            log_warn "Por favor, ejecuta: sudo reboot"
+            log_warn "Al reiniciar, vuelve a ejecutar este script para continuar con el Bloque 1 y Docker."
             exit 0
             ;;
         *)
             log_info "Instalación de drivers omitida por el usuario."
-            log_info "Se continuará el aprovisionamiento de Docker/DevContainers sin Ollama."
+            log_info "Se continuará el aprovisionamiento omitiendo Ollama."
             echo "OLLAMA_ENABLED=false" >> "$STATE_FILE"
             export OLLAMA_ENABLED=false
             ;;
@@ -160,9 +164,14 @@ install_system_core() {
 
 main() {
     log_info "Iniciando aprovisionamiento del entorno..."
-    install_system_core
+    
+    # 1. Prerrequisito crítico: chequeo de hardware/drivers antes de tocar paquetes
     check_gpu_and_ollama_preference
-    log_success "Fase de validación de hardware y base completada."
+
+    # 2. Setup base del sistema
+    install_system_core
+
+    log_success "Fase inicial completada con éxito."
 }
 
 main "$@"
