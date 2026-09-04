@@ -64,4 +64,10 @@ sudo ./setup_workstation.sh
 wget -qO- https://raw.githubusercontent.com/rauldiazsolis/mi-entorno-linux/main/ubuntu/reset_system.sh | sudo bash
 ```
 
+#### Bootstrap
+
+```
+wget -qO- https://raw.githubusercontent.com/rauldiazsolis/mi-entorno-linux/main/ubuntu/bootstrap.sh | sudo bash
+```
+
 
