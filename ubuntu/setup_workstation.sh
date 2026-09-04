@@ -311,9 +311,10 @@ install_github_cli_and_git_config() {
     if ! sudo -u "$TARGET_USER" gh auth status &>/dev/null; then
         log_warn "Es necesario iniciar sesión en GitHub para autoconfigurar tu usuario y correo de Git."
         echo ""
-        echo "--> Completa el login en GitHub desde la consola interactiva:"
-        sudo -u "$TARGET_USER" env DBUS_SESSION_BUS_ADDRESS="${DBUS_SESSION_BUS_ADDRESS:-}" \
-            gh auth login -p https -h github.com -s read:user,user:email </dev/tty >/dev/tty 2>&1 || true
+        # -p https: protocolo HTTPS
+        # -s: scopes necesarios
+        # Imprime directamente el código y la URL sin invocar xdg-open/gio
+        sudo -u "$TARGET_USER" gh auth login --hostname github.com --git-protocol https --web --scopes "read:user,user:email" </dev/tty >/dev/tty 2>&1 || true
     fi
 
     # Si se autenticó con éxito, extraer datos y configurar Git
