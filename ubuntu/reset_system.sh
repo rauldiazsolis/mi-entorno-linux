@@ -21,6 +21,8 @@ systemctl stop docker.service docker.socket 2>/dev/null || true
 
 # 2. Desinstalar paquetes de Bloque 1 y Bloque 2 (Docker)
 PACKAGES_TO_REMOVE=(
+    # NVidia Docker Toolkit
+    nvidia-container-toolkit libnvidia-container-tools libnvidia-container1
     # Docker oficial
     docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
     # Herramientas del sistema y CLI
@@ -57,5 +59,7 @@ echo "--> Limpiando dotfiles en $TARGET_HOME..."
 rm -rf "$TARGET_HOME/.oh-my-zsh"
 rm -f  "$TARGET_HOME/.zshrc" "$TARGET_HOME/.zsh_history"
 rm -rf "$TARGET_HOME/.config/starship.toml" "$TARGET_HOME/.config/btop"
+rm -f /etc/apt/sources.list.d/nvidia-container-toolkit.list
+rm -f /etc/apt/keyrings/nvidia-container-toolkit.asc
 
 echo "==> Sistema reseteado con éxito."
