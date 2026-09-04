@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ==============================================================================
-# git.sh - GitHub CLI, autenticación interactiva e identidad de Git
+# git.sh - GitHub CLI, autenticación e identidad de Git (Espacio de Usuario)
 # ==============================================================================
 set -euo pipefail
 
@@ -8,130 +8,111 @@ SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)
 # shellcheck source=../common.sh
 source "${SCRIPT_DIR}/../common.sh"
 
-check_root
 load_state
 
 ACTION="${1:-install}"
 
-install_git_identity() {
-    log_info "Verificando prerrequisitos para Git y GitHub CLI..."
-    require_state "MODULE_CORE" "installed" "core.sh"
-
-    # 1. Instalar GitHub CLI oficial si no está presente
+# Función interna para instalar el paquete gh con privilegios
+ensure_gh_installed() {
     if command -v gh &>/dev/null; then
-        log_info "GitHub CLI ya está instalado. Omitiendo instalación de paquete..."
-    else
-        log_info "Configurando repositorio oficial de GitHub CLI..."
-        install -m 0755 -d /etc/apt/keyrings
-
-        if [[ ! -f /etc/apt/keyrings/githubcli-archive-keyring.gpg ]]; then
-            curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \
-                | tee /etc/apt/keyrings/githubcli-archive-keyring.gpg > /dev/null
-            chmod 644 /etc/apt/keyrings/githubcli-archive-keyring.gpg
-        fi
-
-        echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" \
-            > /etc/apt/sources.list.d/github-cli.list
-
-        apt-get update -y
-        apt-get install -y --no-install-recommends gh
-        log_success "GitHub CLI instalado correctamente."
-    fi
-
-    # 2. Comprobar si ya existe identidad global configurada
-    local current_user current_email
-    current_user=$(sudo -u "$TARGET_USER" git config --global user.name || true)
-    current_email=$(sudo -u "$TARGET_USER" git config --global user.email || true)
-
-    if [[ -n "$current_user" && -n "$current_email" ]]; then
-        log_info "Identidad de Git ya configurada: $current_user <$current_email>"
-        set_state_var "MODULE_GIT" "installed"
+        log_info "GitHub CLI ya está instalado en el sistema."
         return 0
     fi
 
-    # 3. Flujo de autenticación limpio y asistido
-    if ! sudo -u "$TARGET_USER" gh auth status &>/dev/null; then
-        log_warn "Es necesario iniciar sesión en GitHub para extraer tu perfil y correo."
-        echo ""
+    log_info "Instalando GitHub CLI (requiere privilegios root)..."
+    sudo install -m 0755 -d /etc/apt/keyrings
 
-        # Asegurar utilidades de portapapeles si no existen
-        if ! command -v xclip &>/dev/null && ! command -v wl-copy &>/dev/null; then
-            apt-get install -y --no-install-recommends xclip &>/dev/null || true
-        fi
-
-        # Iniciar login pasando flags para evitar el asistente interactivo de preguntas
-        # -p https: fuerza protocolo HTTPS
-        # -h github.com: host
-        # -s: scopes requeridos
-        log_info "Generando sesión de GitHub Device..."
-        
-        # Obtenemos las variables de sesión gráfica del usuario para abrir el navegador real
-        local user_display user_dbus
-        user_display=$(sudo -u "$TARGET_USER" printenv DISPLAY || echo ":0")
-        user_dbus=$(sudo -u "$TARGET_USER" printenv DBUS_SESSION_BUS_ADDRESS || echo "")
-
-        # Lanzar Firefox directamente en segundo plano con la URL de activación
-        if sudo -u "$TARGET_USER" command -v firefox &>/dev/null; then
-            sudo -u "$TARGET_USER" DISPLAY="$user_display" DBUS_SESSION_BUS_ADDRESS="$user_dbus" \
-                firefox "https://github.com/login/device" &>/dev/null &
-            log_info "Se abrió https://github.com/login/device en Firefox."
-        fi
-
-        echo "------------------------------------------------------------"
-        echo " Ingresa el código en el navegador para autorizar la máquina:"
-        echo "------------------------------------------------------------"
-
-        # gh auth login en modo manual/web sin lanzar browser roto
-        sudo -u "$TARGET_USER" env BROWSER="true" \
-            gh auth login --hostname github.com --git-protocol https --web --scopes "read:user,user:email" </dev/tty >/dev/tty 2>&1 || true
+    if [[ ! -f /etc/apt/keyrings/githubcli-archive-keyring.gpg ]]; then
+        curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \
+            | sudo tee /etc/apt/keyrings/githubcli-archive-keyring.gpg > /dev/null
+        sudo chmod 644 /etc/apt/keyrings/githubcli-archive-keyring.gpg
     fi
 
-    # 4. Extraer datos del perfil autenticado e inyectar en gitconfig
-    if sudo -u "$TARGET_USER" gh auth status &>/dev/null; then
+    echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" \
+        | sudo tee /etc/apt/sources.list.d/github-cli.list > /dev/null
+
+    sudo apt-get update -y
+    sudo apt-get install -y --no-install-recommends gh
+    log_success "GitHub CLI instalado correctamente."
+}
+
+install_git_identity() {
+    log_info "Verificando prerrequisitos para Git..."
+    require_state "MODULE_CORE" "installed" "core.sh"
+
+    # 1. Instalar gh si falta (solicita sudo de forma acotada si es necesario)
+    ensure_gh_installed
+
+    # 2. Comprobar si ya existe identidad configurada
+    local current_user current_email
+    current_user=$(git config --global user.name || true)
+    current_email=$(git config --global user.email || true)
+
+    if [[ -n "$current_user" && -n "$current_email" ]]; then
+        log_info "Identidad de Git ya configurada: $current_user <$current_email>"
+        sudo bash -c "source '${SCRIPT_DIR}/../common.sh' && set_state_var MODULE_GIT installed"
+        return 0
+    fi
+
+    # 3. Flujo interactivo en espacio de usuario
+    if ! gh auth status &>/dev/null; then
+        log_warn "Iniciando autenticación en GitHub..."
+        echo ""
+
+        # Iniciar login web en segundo plano para interceptar el código
+        # gh auth login en modo web directo
+        echo "--> Abriendo Firefox en https://github.com/login/device..."
+        xdg-open "https://github.com/login/device" &>/dev/null || true
+
+        echo "--> Copia el código que aparecerá a continuación e ingrésalo en Firefox:"
+        echo ""
+        gh auth login --hostname github.com --git-protocol https --web --scopes "read:user,user:email"
+    fi
+
+    # 4. Extraer identidad y configurar ~/.gitconfig
+    if gh auth status &>/dev/null; then
         local gh_name gh_email
-        gh_name=$(sudo -u "$TARGET_USER" gh api user --jq '.name // .login')
-        gh_email=$(sudo -u "$TARGET_USER" gh api user/emails --jq '[.[] | select(.primary == true)][0].email // empty')
+        gh_name=$(gh api user --jq '.name // .login')
+        gh_email=$(gh api user/emails --jq '[.[] | select(.primary == true)][0].email // empty')
 
         if [[ -z "$gh_email" ]]; then
-            gh_email=$(sudo -u "$TARGET_USER" gh api user --jq '.email // empty')
+            gh_email=$(gh api user --jq '.email // empty')
         fi
 
         if [[ -n "$gh_name" ]]; then
-            sudo -u "$TARGET_USER" git config --global user.name "$gh_name"
+            git config --global user.name "$gh_name"
             log_success "user.name configurado: $gh_name"
         fi
 
         if [[ -n "$gh_email" ]]; then
-            sudo -u "$TARGET_USER" git config --global user.email "$gh_email"
+            git config --global user.email "$gh_email"
             log_success "user.email configurado: $gh_email"
         fi
 
-        # Helper oficial para no volver a pedir contraseña en git push/pull
-        sudo -u "$TARGET_USER" gh auth setup-git
+        gh auth setup-git
         log_success "Helper de credenciales configurado para Git."
     else
-        log_warn "Autenticación omitida o incompleta. Configura Git manualmente con: git config --global"
+        log_warn "Autenticación no completada. Configura Git manualmente con 'git config --global'."
     fi
 
-    set_state_var "MODULE_GIT" "installed"
+    sudo bash -c "source '${SCRIPT_DIR}/../common.sh' && set_state_var MODULE_GIT installed"
     log_success "Módulo Git completado y registrado."
 }
 
 remove_git_identity() {
     log_info "Solicitada desinstalación del módulo Git / GitHub CLI..."
-
     prevent_removal_if "MODULE_VSCODE" "vscode.sh"
 
-    log_info "Eliminando paquete gh y configuración de repositorio..."
-    apt-get remove -y gh || true
-    rm -f /etc/apt/sources.list.d/github-cli.list
-    rm -f /etc/apt/keyrings/githubcli-archive-keyring.gpg
+    log_info "Eliminando paquete gh..."
+    sudo apt-get remove -y gh || true
+    sudo rm -f /etc/apt/sources.list.d/github-cli.list
+    sudo rm -f /etc/apt/keyrings/githubcli-archive-keyring.gpg
 
-    log_info "Limpiando credenciales y configuración global de Git..."
-    rm -f "$TARGET_HOME/.gitconfig"
-    rm -rf "$TARGET_HOME/.config/gh"
+    log_info "Limpiando configuración de Git..."
+    rm -f "$HOME/.gitconfig"
+    rm -rf "$HOME/.config/gh"
 
-    unset_state_var "MODULE_GIT"
+    sudo bash -c "source '${SCRIPT_DIR}/../common.sh' && unset_state_var MODULE_GIT"
     log_success "Módulo Git desinstalado y desregistrado con éxito."
 }
 
