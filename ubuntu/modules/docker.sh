@@ -55,7 +55,7 @@ install_docker() {
     systemctl start docker.service
 
     # 3. Soporte de GPU (solo si el módulo GPU habilitó aceleración)
-    if [[ "${OLLAMA_ENABLED:-false}" == "true" ]]; then
+    if [[ "${GPU_DRIVER_INSTALLED:-false}" == "true" ]]; then
         if dpkg -l | grep -qw "nvidia-container-toolkit"; then
             log_info "NVIDIA Container Toolkit ya está presente. Omitiendo..."
         else
