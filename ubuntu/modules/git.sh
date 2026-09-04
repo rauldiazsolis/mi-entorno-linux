@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ==============================================================================
-# git.sh - GitHub CLI, autenticación e identidad de Git (Espacio de Usuario)
+# git.sh - GitHub CLI, autenticación e identidad de Git
 # ==============================================================================
 set -euo pipefail
 
@@ -12,14 +12,13 @@ load_state
 
 ACTION="${1:-install}"
 
-# Función interna para instalar el paquete gh con privilegios
 ensure_gh_installed() {
     if command -v gh &>/dev/null; then
         log_info "GitHub CLI ya está instalado en el sistema."
         return 0
     fi
 
-    log_info "Instalando GitHub CLI (requiere privilegios root)..."
+    log_info "Instalando GitHub CLI (requiere sudo)..."
     sudo install -m 0755 -d /etc/apt/keyrings
 
     if [[ ! -f /etc/apt/keyrings/githubcli-archive-keyring.gpg ]]; then
@@ -40,10 +39,9 @@ install_git_identity() {
     log_info "Verificando prerrequisitos para Git..."
     require_state "MODULE_CORE" "installed" "core.sh"
 
-    # 1. Instalar gh si falta (solicita sudo de forma acotada si es necesario)
     ensure_gh_installed
 
-    # 2. Comprobar si ya existe identidad configurada
+    # Comprobar si ya existe identidad global configurada
     local current_user current_email
     current_user=$(git config --global user.name || true)
     current_email=$(git config --global user.email || true)
@@ -54,30 +52,13 @@ install_git_identity() {
         return 0
     fi
 
-    # 3. Flujo asistido oficial mediante gh con copia a clipboard
+    # Flujo de autenticación con respuesta automática a credenciales
     if ! gh auth status &>/dev/null; then
-        log_warn "Es necesario iniciar sesión en GitHub para extraer tu perfil y correo."
-
-        # Asegurar xclip para soporte de portapapeles
-        if ! command -v xclip &>/dev/null; then
-            sudo apt-get install -y --no-install-recommends xclip &>/dev/null || true
-        fi
-
-        echo ""
-        echo "--> Preparando autenticación..."
-        echo "--> El navegador se abrirá en https://github.com/login/device."
-        echo ""
-
-        # Definir script temporal de apertura que copia el link y levanta el browser
-        export BROWSER="xdg-open"
-
-        # Lanzar gh auth login preconfigurado (sin preguntas previas de protocolo)
-        # --git-protocol https evita la primera pregunta
-        # -w abre el navegador web usando el BROWSER asignado
-        gh auth login -h github.com -p https -w -s "read:user,user:email" </dev/tty >/dev/tty 2>&1 || true
+        log_warn "Iniciando autenticación interactiva en GitHub..."
+        printf "Y\n" | gh auth login -h github.com -p https -w -s "read:user,user:email"
     fi
 
-    # 4. Extraer identidad y configurar ~/.gitconfig
+    # Extraer datos y configurar Git
     if gh auth status &>/dev/null; then
         local gh_name gh_email
         gh_name=$(gh api user --jq '.name // .login')
@@ -100,7 +81,7 @@ install_git_identity() {
         gh auth setup-git
         log_success "Helper de credenciales configurado para Git."
     else
-        log_warn "Autenticación no completada. Configura Git manualmente con 'git config --global'."
+        log_warn "Autenticación omitida o incompleta."
     fi
 
     sudo bash -c "source '${SCRIPT_DIR}/../common.sh' && set_state_var MODULE_GIT installed"
@@ -116,7 +97,7 @@ remove_git_identity() {
     sudo rm -f /etc/apt/sources.list.d/github-cli.list
     sudo rm -f /etc/apt/keyrings/githubcli-archive-keyring.gpg
 
-    log_info "Limpiando configuración de Git..."
+    log_info "Limpiando credenciales y configuración global de Git..."
     rm -f "$HOME/.gitconfig"
     rm -rf "$HOME/.config/gh"
 
