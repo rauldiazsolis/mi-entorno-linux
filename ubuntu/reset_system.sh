@@ -15,6 +15,23 @@ STATE_FILE="/etc/workstation.state"
 
 echo "==> Iniciando reseteo del sistema..."
 
+# Detener y deshabilitar servicio de Ollama
+if systemctl is-active --quiet ollama.service 2>/dev/null; then
+    echo "--> Deteniendo servicio Ollama..."
+    systemctl stop ollama.service
+    systemctl disable ollama.service 2>/dev/null || true
+fi
+
+# Eliminar binario, servicio y usuario de Ollama
+rm -f /usr/local/bin/ollama
+rm -f /etc/systemd/system/ollama.service
+systemctl daemon-reload
+
+# Limpiar modelos descargados en caso de reseteo total
+rm -rf /usr/share/ollama
+
+# Fin desinstalación Ollama
+
 # 1. Detener servicios antes de desinstalar
 echo "--> Deteniendo servicios..."
 systemctl stop docker.service docker.socket 2>/dev/null || true
