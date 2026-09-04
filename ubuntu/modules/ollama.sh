@@ -17,11 +17,14 @@ install_ollama() {
     log_info "Verificando prerrequisitos para Ollama..."
     require_state "MODULE_CORE" "installed" "core.sh"
     require_state "GPU_DECIDED" "true" "gpu.sh"
-
-    if [[ "${OLLAMA_ENABLED:-false}" != "true" ]]; then
-        log_info "GPU NVIDIA no habilitada o ausente. Omitiendo instalación de Ollama."
-        return 0
+    
+    # Detecta cómo va a correr:
+    if [[ "${GPU_DRIVER_INSTALLED:-false}" == "true" ]]; then
+        log_success "Ollama utilizará aceleración por GPU NVIDIA."
+    else
+        log_warn "Driver NVIDIA no activo. Ollama se ejecutará sobre CPU."
     fi
+    # Instala el servicio normalmente
 
     # 1. Instalar binario y servicio systemd oficial
     if command -v ollama &>/dev/null; then
