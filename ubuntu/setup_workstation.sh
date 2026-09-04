@@ -213,7 +213,6 @@ install_docker_engine() {
 # Bloque 4: Instala NVidia Docker Toolkit 
 # ------------------------------------------------------------------------------
 install_nvidia_docker_toolkit() {
-    # Solo se instala si la máquina tiene NVIDIA funcional
     if [[ "${OLLAMA_ENABLED:-false}" != "true" ]]; then
         log_info "GPU NVIDIA no habilitada. Omitiendo NVIDIA Container Toolkit..."
         return 0
@@ -223,30 +222,32 @@ install_nvidia_docker_toolkit() {
         log_info "NVIDIA Container Toolkit ya está instalado. Omitiendo..."
     else
         log_info "Configurando repositorio oficial de NVIDIA Container Toolkit..."
-        install -m 0755 -d /etc/apt/keyrings
+        
+        # 1. Limpiar archivos corruptos o mal formateados previos
+        rm -f /etc/apt/keyrings/nvidia-container-toolkit.asc
+        rm -f /usr/share/keyrings/nvidia-container-toolkit-keyring.gpg
+        rm -f /etc/apt/sources.list.d/nvidia-container-toolkit.list
 
-        # Clave GPG oficial de NVIDIA
-        if [[ ! -f /etc/apt/keyrings/nvidia-container-toolkit.asc ]]; then
-            curl -fsSL https://nvidia.github.io/libnvidia-container/gpgkey \
-                | gpg --dearmor -o /etc/apt/keyrings/nvidia-container-toolkit.asc
-            chmod a+r /etc/apt/keyrings/nvidia-container-toolkit.asc
-        fi
+        # 2. Descargar y desarmar la clave en .gpg binario válido
+        curl -fsSL https://nvidia.github.io/libnvidia-container/gpgkey \
+            | gpg --dearmor -o /usr/share/keyrings/nvidia-container-toolkit-keyring.gpg
+        chmod a+r /usr/share/keyrings/nvidia-container-toolkit-keyring.gpg
 
-        # Lista de repositorio oficial
+        # 3. Configurar la lista apuntando explícitamente a la llave .gpg
         curl -s -L https://nvidia.github.io/libnvidia-container/stable/deb/nvidia-container-toolkit.list \
-            | sed 's#deb https://#deb [signed-by=/etc/apt/keyrings/nvidia-container-toolkit.asc] https://#g' \
+            | sed 's#deb https://#deb [signed-by=/usr/share/keyrings/nvidia-container-toolkit-keyring.gpg] https://#g' \
             > /etc/apt/sources.list.d/nvidia-container-toolkit.list
 
         apt-get update -y
         log_info "Instalando nvidia-container-toolkit..."
         apt-get install -y --no-install-recommends nvidia-container-toolkit
 
-        # Configurar el runtime de Docker para que reconozca NVIDIA por defecto
+        # 4. Registrar el runtime en Docker y reiniciar el servicio
         log_info "Configurando runtime de Docker para NVIDIA..."
         nvidia-ctk runtime configure --runtime=docker
         systemctl restart docker
 
-        log_success "NVIDIA Container Toolkit instalado y Docker reiniciado con éxito."
+        log_success "NVIDIA Container Toolkit instalado y Docker configurado con GPU."
     fi
 }
 
