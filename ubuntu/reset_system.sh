@@ -25,6 +25,8 @@ systemctl stop docker.service docker.socket 2>/dev/null || true
 
 # 2. Desinstalar paquetes de APT (Bloque 1 y Bloque 2)
 PACKAGES_TO_REMOVE=(
+    # Github
+    gh
     # NVIDIA Container Toolkit
     nvidia-container-toolkit libnvidia-container-tools libnvidia-container1
     # Docker Engine oficial
@@ -45,6 +47,8 @@ rm -f /etc/apt/sources.list.d/nvidia-container-toolkit.list
 rm -f /etc/apt/keyrings/docker.asc
 rm -f /etc/apt/keyrings/nvidia-container-toolkit.asc
 rm -f /usr/share/keyrings/nvidia-container-toolkit-keyring.gpg
+rm -f /etc/apt/sources.list.d/github-cli.list
+rm -f /etc/apt/keyrings/githubcli-archive-keyring.gpg
 
 # 4. Eliminar binarios directos, servicios y datos de Ollama
 echo "--> Purgando binarios y datos de Ollama..."
@@ -76,5 +80,7 @@ rm -rf "$TARGET_HOME/.oh-my-zsh"
 rm -f  "$TARGET_HOME/.zshrc" "$TARGET_HOME/.zsh_history"
 rm -rf "$TARGET_HOME/.config/starship.toml" "$TARGET_HOME/.config/btop"
 rm -rf "$TARGET_HOME/.ollama"
+rm -f "$TARGET_HOME/.gitconfig"
+rm -rf "$TARGET_HOME/.config/gh"
 
 echo "==> Sistema reseteado con éxito."
