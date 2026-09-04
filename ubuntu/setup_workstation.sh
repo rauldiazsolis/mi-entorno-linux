@@ -270,6 +270,79 @@ install_ollama() {
     log_success "Servicio Ollama activo en localhost:11434."
 }
 
+# ------------------------------------------------------------------------------
+# Bloque 6: Instala Githb CLI y Git Config 
+# ------------------------------------------------------------------------------
+install_github_cli_and_git_config() {
+    # 1. Instalar GitHub CLI si no está presente
+    if ! command -v gh &>/dev/null; then
+        log_info "Configurando repositorio oficial de GitHub CLI..."
+        install -m 0755 -d /etc/apt/keyrings
+
+        if [[ ! -f /etc/apt/keyrings/githubcli-archive-keyring.gpg ]]; then
+            curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \
+                | tee /etc/apt/keyrings/githubcli-archive-keyring.gpg > /dev/null
+            chmod 644 /etc/apt/keyrings/githubcli-archive-keyring.gpg
+        fi
+
+        echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" \
+            > /etc/apt/sources.list.d/github-cli.list
+
+        apt-get update -y
+        log_info "Instalando gh CLI..."
+        apt-get install -y --no-install-recommends gh
+        log_success "GitHub CLI instalado correctamente."
+    else
+        log_info "GitHub CLI ya está instalado. Omitiendo..."
+    fi
+
+    # 2. Configurar identidad Git usando GitHub CLI
+    local git_user_set
+    git_user_set=$(sudo -u "$TARGET_USER" git config --global user.name || true)
+
+    if [[ -n "$git_user_set" ]]; then
+        log_info "Git ya está configurado para el usuario: $git_user_set"
+        return 0
+    fi
+
+    log_info "Configurando identidad de Git a través de GitHub CLI..."
+    
+    # Comprobar si ya está logueado en GitHub
+    if ! sudo -u "$TARGET_USER" gh auth status &>/dev/null; then
+        log_warn "Es necesario iniciar sesión en GitHub para autoconfigurar tu usuario y correo de Git."
+        # Se invoca con la terminal conectada para permitir interacción directa
+        sudo -u "$TARGET_USER" gh auth login -w </dev/tty >/dev/tty 2>&1 || true
+    fi
+
+    # Si se autenticó con éxito, extraer datos y configurar Git
+    if sudo -u "$TARGET_USER" gh auth status &>/dev/null; then
+        local gh_name gh_email
+        gh_name=$(sudo -u "$TARGET_USER" gh api user --jq '.name // .login')
+        gh_email=$(sudo -u "$TARGET_USER" gh api user/emails --jq '[.[] | select(.primary == true)][0].email // empty')
+
+        # Fallback en caso de que el correo público sea nulo o privado
+        if [[ -z "$gh_email" ]]; then
+            gh_email=$(sudo -u "$TARGET_USER" gh api user --jq '.email // empty')
+        fi
+
+        if [[ -n "$gh_name" ]]; then
+            sudo -u "$TARGET_USER" git config --global user.name "$gh_name"
+            log_success "Git user.name establecido en: $gh_name"
+        fi
+
+        if [[ -n "$gh_email" ]]; then
+            sudo -u "$TARGET_USER" git config --global user.email "$gh_email"
+            log_success "Git user.email establecido en: $gh_email"
+        fi
+
+        # Configurar integración de credenciales para git clone/push automáticos
+        sudo -u "$TARGET_USER" gh auth setup-git
+        log_success "Credenciales de Git configuradas con gh."
+    else
+        log_warn "No se completó la autenticación en GitHub. La identidad de Git quedó pendiente para configurarse manualmente."
+    fi
+}
+
 main() {
     log_info "Iniciando aprovisionamiento del entorno..."
     
@@ -287,6 +360,9 @@ main() {
 
     # 5. Instala Ollama
     install_ollama
+    
+    # 6. Instala Githb CLI y Git Config 
+    install_github_cli_and_git_config
     
     log_success "Fase inicial completada con éxito."
 }
