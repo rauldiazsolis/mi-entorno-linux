@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ==============================================================================
-# ollama.sh - Servicio local Ollama y modelos LLM
+# ollama.sh - Servicio local Ollama (Headless API)
 # ==============================================================================
 set -euo pipefail
 
@@ -17,30 +17,28 @@ install_ollama() {
     log_info "Verificando prerrequisitos para Ollama..."
     require_state "MODULE_CORE" "installed" "core.sh"
     require_state "GPU_DECIDED" "true" "gpu.sh"
-    
-    # Detecta cómo va a correr:
-    if [[ "${GPU_DRIVER_INSTALLED:-false}" == "true" ]]; then
-        log_success "Ollama utilizará aceleración por GPU NVIDIA."
-    else
-        log_warn "Driver NVIDIA no activo. Ollama se ejecutará sobre CPU."
-    fi
-    # Instala el servicio normalmente
 
-    # 1. Instalar binario y servicio systemd oficial
+    if [[ "${GPU_DRIVER_INSTALLED:-false}" == "true" ]]; then
+        log_success "Driver NVIDIA detectado: Ollama se ejecutará con aceleración por GPU."
+    else
+        log_warn "Driver NVIDIA no disponible: Ollama se ejecutará en modo CPU."
+    fi
+
+    # 1. Instalar binario oficial y servicio systemd
     if command -v ollama &>/dev/null; then
         log_info "Ollama ya está instalado en el sistema. Omitiendo descarga..."
     else
-        log_info "Instalando Ollama como servicio nativo..."
+        log_info "Descargando e instalando Ollama..."
         curl -fsSL https://ollama.com/install.sh | sh
-        log_success "Binario de Ollama instalado."
+        log_success "Ollama instalado correctamente."
     fi
 
-    # 2. Habilitar y levantar servicio
+    # 2. Iniciar y habilitar servicio systemd nativo
     systemctl enable ollama.service
     systemctl restart ollama.service
 
-    # 3. Esperar que el socket HTTP responda en localhost:11434
-    log_info "Esperando disponibilidad del daemon de Ollama..."
+    # 3. Comprobar disponibilidad del daemon
+    log_info "Verificando daemon en localhost:11434..."
     local retries=10
     until curl -s http://localhost:11434/api/version &>/dev/null || [[ $retries -eq 0 ]]; do
         sleep 1
@@ -48,9 +46,9 @@ install_ollama() {
     done
 
     if [[ $retries -eq 0 ]]; then
-        log_warn "El servicio Ollama demoró en responder, pero el daemon sigue en ejecución."
+        log_warn "El socket demoró en responder, pero el servicio systemd está activo."
     else
-        log_success "Servicio Ollama activo y respondiendo en localhost:11434."
+        log_success "Servicio Ollama operativo en http://localhost:11434"
     fi
 
     set_state_var "MODULE_OLLAMA" "installed"
@@ -60,23 +58,21 @@ install_ollama() {
 remove_ollama() {
     log_info "Solicitada desinstalación del módulo Ollama..."
 
-    # Bloqueo inverso si módulos futuros dependen de Ollama
+    prevent_removal_if "MODULE_OPENWEBUI" "open-webui.sh"
     prevent_removal_if "MODULE_CONTINUE" "continue.sh"
 
-    log_info "Deteniendo y deshabilitando servicio systemd..."
+    log_info "Deteniendo servicio systemd..."
     systemctl stop ollama.service 2>/dev/null || true
     systemctl disable ollama.service 2>/dev/null || true
 
-    log_info "Purgando binario, servicio y modelos descargados..."
+    log_info "Purgando binarios y datos..."
     rm -f /usr/local/bin/ollama
     rm -f /etc/systemd/system/ollama.service
     systemctl daemon-reload
 
-    # Purgar datos y modelos almacenados
     rm -rf /usr/share/ollama
     rm -rf "$TARGET_HOME/.ollama"
 
-    # Eliminar usuario de sistema si existe
     userdel -r ollama 2>/dev/null || true
     groupdel ollama 2>/dev/null || true
 
