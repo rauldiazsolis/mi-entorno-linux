@@ -49,12 +49,41 @@ install_git_identity() {
         return 0
     fi
 
-    # 3. Flujo de autenticación interactivo mediante consola
+    # 3. Flujo de autenticación limpio y asistido
     if ! sudo -u "$TARGET_USER" gh auth status &>/dev/null; then
         log_warn "Es necesario iniciar sesión en GitHub para extraer tu perfil y correo."
         echo ""
-        echo "--> Sigue las instrucciones en pantalla para vincular tu cuenta:"
-        sudo -u "$TARGET_USER" gh auth login --hostname github.com --git-protocol https --web --scopes "read:user,user:email" </dev/tty >/dev/tty 2>&1 || true
+
+        # Asegurar utilidades de portapapeles si no existen
+        if ! command -v xclip &>/dev/null && ! command -v wl-copy &>/dev/null; then
+            apt-get install -y --no-install-recommends xclip &>/dev/null || true
+        fi
+
+        # Iniciar login pasando flags para evitar el asistente interactivo de preguntas
+        # -p https: fuerza protocolo HTTPS
+        # -h github.com: host
+        # -s: scopes requeridos
+        log_info "Generando sesión de GitHub Device..."
+        
+        # Obtenemos las variables de sesión gráfica del usuario para abrir el navegador real
+        local user_display user_dbus
+        user_display=$(sudo -u "$TARGET_USER" printenv DISPLAY || echo ":0")
+        user_dbus=$(sudo -u "$TARGET_USER" printenv DBUS_SESSION_BUS_ADDRESS || echo "")
+
+        # Lanzar Firefox directamente en segundo plano con la URL de activación
+        if sudo -u "$TARGET_USER" command -v firefox &>/dev/null; then
+            sudo -u "$TARGET_USER" DISPLAY="$user_display" DBUS_SESSION_BUS_ADDRESS="$user_dbus" \
+                firefox "https://github.com/login/device" &>/dev/null &
+            log_info "Se abrió https://github.com/login/device en Firefox."
+        fi
+
+        echo "------------------------------------------------------------"
+        echo " Ingresa el código en el navegador para autorizar la máquina:"
+        echo "------------------------------------------------------------"
+
+        # gh auth login en modo manual/web sin lanzar browser roto
+        sudo -u "$TARGET_USER" env BROWSER="true" \
+            gh auth login --hostname github.com --git-protocol https --web --scopes "read:user,user:email" </dev/tty >/dev/tty 2>&1 || true
     fi
 
     # 4. Extraer datos del perfil autenticado e inyectar en gitconfig
