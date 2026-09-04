@@ -247,6 +247,29 @@ install_nvidia_docker_toolkit() {
     fi
 }
 
+# ------------------------------------------------------------------------------
+# Bloque 5: Instala Ollama 
+# ------------------------------------------------------------------------------
+install_ollama() {
+    if [[ "${OLLAMA_ENABLED:-false}" != "true" ]]; then
+        log_info "GPU dedicada no habilitada. Omitiendo instalación de Ollama..."
+        return 0
+    fi
+
+    if command -v ollama &>/dev/null; then
+        log_info "Ollama ya está instalado. Omitiendo..."
+    else
+        log_info "Instalando Ollama como servicio nativo..."
+        curl -fsSL https://ollama.com/install.sh | sh
+        log_success "Ollama instalado correctamente."
+    fi
+
+    # Asegurar que el daemon de systemd esté activo
+    systemctl enable ollama.service
+    systemctl start ollama.service
+    log_success "Servicio Ollama activo en localhost:11434."
+}
+
 main() {
     log_info "Iniciando aprovisionamiento del entorno..."
     
@@ -262,6 +285,9 @@ main() {
     # 4. Instala NVidia Docker Toolkit
     install_nvidia_docker_toolkit
 
+    # 5. Instala Ollama
+    install_ollama
+    
     log_success "Fase inicial completada con éxito."
 }
 
