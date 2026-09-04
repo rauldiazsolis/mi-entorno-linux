@@ -54,19 +54,80 @@ install_git_identity() {
         return 0
     fi
 
-    # 3. Flujo interactivo en espacio de usuario
+# 3. Autenticación asistida con portapapeles y navegador
     if ! gh auth status &>/dev/null; then
-        log_warn "Iniciando autenticación en GitHub..."
+        log_warn "Iniciando vinculación con GitHub..."
+
+        # Asegurar xclip para el portapapeles
+        if ! command -v xclip &>/dev/null; then
+            sudo apt-get install -y --no-install-recommends xclip &>/dev/null || true
+        fi
+
+        # Client ID oficial de GitHub CLI para Device Flow
+        local client_id="178c6fc778aca681fa96"
+        local response
+        response=$(curl -s -X POST https://github.com/login/device/code \
+            -H "Accept: application/json" \
+            -d "client_id=${client_id}&scope=repo,read:org,read:user,user:email")
+
+        local device_code user_code verification_uri interval
+        device_code=$(echo "$response" | jq -r '.device_code')
+        user_code=$(echo "$response" | jq -r '.user_code')
+        verification_uri=$(echo "$response" | jq -r '.verification_uri // "https://github.com/login/device"')
+        interval=$(echo "$response" | jq -r '.interval // 5')
+
+        if [[ -z "$user_code" || "$user_code" == "null" ]]; then
+            log_error "No se pudo obtener el código de activación de GitHub. Comprueba tu conexión."
+            exit 1
+        fi
+
+        # Copiar código al portapapeles automáticamente
+        echo -n "$user_code" | xclip -selection clipboard 2>/dev/null || true
+
+        echo ""
+        echo "============================================================"
+        echo -e " Código de activación: \e[1;32m${user_code}\e[0m (¡Copiado al portapapeles!)"
+        echo "============================================================"
+        echo "--> Abriendo ${verification_uri} en Firefox..."
+        echo "--> Simplemente presiona Ctrl + V en la página y haz clic en Continuar."
         echo ""
 
-        # Iniciar login web en segundo plano para interceptar el código
-        # gh auth login en modo web directo
-        echo "--> Abriendo Firefox en https://github.com/login/device..."
-        xdg-open "https://github.com/login/device" &>/dev/null || true
+        xdg-open "$verification_uri" &>/dev/null &
 
-        echo "--> Copia el código que aparecerá a continuación e ingrésalo en Firefox:"
-        echo ""
-        gh auth login --hostname github.com --git-protocol https --web --scopes "read:user,user:email"
+        # Esperar autorización en segundo plano
+        log_info "Esperando autorización en el navegador..."
+        local token=""
+        while true; do
+            sleep "$interval"
+            local poll_resp
+            poll_resp=$(curl -s -X POST https://github.com/login/oauth/access_token \
+                -H "Accept: application/json" \
+                -d "client_id=${client_id}&device_code=${device_code}&grant_type=urn:ietf:params:oauth:grant-type:device_code")
+
+            local error
+            error=$(echo "$poll_resp" | jq -r '.error // empty')
+
+            if [[ "$error" == "authorization_pending" ]]; then
+                continue
+            elif [[ "$error" == "slow_down" ]]; then
+                interval=$((interval + 5))
+                continue
+            elif [[ -n "$error" ]]; then
+                log_error "Error en la autorización de GitHub: $error"
+                break
+            fi
+
+            token=$(echo "$poll_resp" | jq -r '.access_token // empty')
+            if [[ -n "$token" ]]; then
+                break
+            fi
+        done
+
+        if [[ -n "$token" ]]; then
+            echo "$token" | gh auth login --with-token
+            gh config set -h github.com git_protocol https
+            log_success "Autenticación en GitHub completada con éxito."
+        fi
     fi
 
     # 4. Extraer identidad y configurar ~/.gitconfig
