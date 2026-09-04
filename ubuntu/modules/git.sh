@@ -41,44 +41,35 @@ install_git_identity() {
 
     ensure_gh_installed
 
-    # Comprobar si ya existe identidad global configurada
-    local current_user current_email
-    current_user=$(git config --global user.name || true)
-    current_email=$(git config --global user.email || true)
+    local gitconfig_file="${TARGET_HOME}/.gitconfig"
 
-    if [[ -n "$current_user" && -n "$current_email" ]]; then
-        log_info "Identidad de Git ya configurada: $current_user <$current_email>"
-        sudo bash -c "source '${SCRIPT_DIR}/../common.sh' && set_state_var MODULE_GIT installed"
-        return 0
-    fi
-
-    # Flujo de autenticación con respuesta automática a credenciales
-    if ! gh auth status &>/dev/null; then
+    # 1. Flujo de autenticación si gh no está logueado
+    if ! sudo -u "$TARGET_USER" gh auth status &>/dev/null; then
         log_warn "Iniciando autenticación interactiva en GitHub..."
-        printf "Y\n" | gh auth login -h github.com -p https -w -s "read:user,user:email"
+        printf "Y\n" | sudo -u "$TARGET_USER" gh auth login -h github.com -p https -w -s "read:user,user:email"
     fi
 
-    # Extraer datos y configurar Git
-    if gh auth status &>/dev/null; then
+    # 2. Extraer datos de la API y forzar escritura en el .gitconfig del usuario real
+    if sudo -u "$TARGET_USER" gh auth status &>/dev/null; then
         local gh_name gh_email
-        gh_name=$(gh api user --jq '.name // .login')
-        gh_email=$(gh api user/emails --jq '[.[] | select(.primary == true)][0].email // empty')
+        gh_name=$(sudo -u "$TARGET_USER" gh api user --jq '.name // .login')
+        gh_email=$(sudo -u "$TARGET_USER" gh api user/emails --jq '[.[] | select(.primary == true)][0].email // empty')
 
         if [[ -z "$gh_email" ]]; then
-            gh_email=$(gh api user --jq '.email // empty')
+            gh_email=$(sudo -u "$TARGET_USER" gh api user --jq '.email // empty')
         fi
 
         if [[ -n "$gh_name" ]]; then
-            git config --global user.name "$gh_name"
+            sudo -u "$TARGET_USER" git config --file "$gitconfig_file" user.name "$gh_name"
             log_success "user.name configurado: $gh_name"
         fi
 
         if [[ -n "$gh_email" ]]; then
-            git config --global user.email "$gh_email"
+            sudo -u "$TARGET_USER" git config --file "$gitconfig_file" user.email "$gh_email"
             log_success "user.email configurado: $gh_email"
         fi
 
-        gh auth setup-git
+        sudo -u "$TARGET_USER" gh auth setup-git
         log_success "Helper de credenciales configurado para Git."
     else
         log_warn "Autenticación omitida o incompleta."
