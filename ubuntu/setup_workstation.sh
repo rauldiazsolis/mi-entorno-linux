@@ -209,6 +209,47 @@ install_docker_engine() {
     log_success "Servicio Docker activo y habilitado."
 }
 
+# ------------------------------------------------------------------------------
+# Bloque 4: Instala NVidia Docker Toolkit 
+# ------------------------------------------------------------------------------
+install_nvidia_docker_toolkit() {
+    # Solo se instala si la máquina tiene NVIDIA funcional
+    if [[ "${OLLAMA_ENABLED:-false}" != "true" ]]; then
+        log_info "GPU NVIDIA no habilitada. Omitiendo NVIDIA Container Toolkit..."
+        return 0
+    fi
+
+    if dpkg -l | grep -qw "nvidia-container-toolkit"; then
+        log_info "NVIDIA Container Toolkit ya está instalado. Omitiendo..."
+    else
+        log_info "Configurando repositorio oficial de NVIDIA Container Toolkit..."
+        install -m 0755 -d /etc/apt/keyrings
+
+        # Clave GPG oficial de NVIDIA
+        if [[ ! -f /etc/apt/keyrings/nvidia-container-toolkit.asc ]]; then
+            curl -fsSL https://nvidia.github.io/libnvidia-container/gpgkey \
+                | gpg --dearmor -o /etc/apt/keyrings/nvidia-container-toolkit.asc
+            chmod a+r /etc/apt/keyrings/nvidia-container-toolkit.asc
+        fi
+
+        # Lista de repositorio oficial
+        curl -s -L https://nvidia.github.io/libnvidia-container/stable/deb/nvidia-container-toolkit.list \
+            | sed 's#deb https://#deb [signed-by=/etc/apt/keyrings/nvidia-container-toolkit.asc] https://#g' \
+            > /etc/apt/sources.list.d/nvidia-container-toolkit.list
+
+        apt-get update -y
+        log_info "Instalando nvidia-container-toolkit..."
+        apt-get install -y --no-install-recommends nvidia-container-toolkit
+
+        # Configurar el runtime de Docker para que reconozca NVIDIA por defecto
+        log_info "Configurando runtime de Docker para NVIDIA..."
+        nvidia-ctk runtime configure --runtime=docker
+        systemctl restart docker
+
+        log_success "NVIDIA Container Toolkit instalado y Docker reiniciado con éxito."
+    fi
+}
+
 main() {
     log_info "Iniciando aprovisionamiento del entorno..."
     
@@ -220,6 +261,9 @@ main() {
 
     # 3. Setup base del sistema
     install_docker_engine
+
+    # 4. Instala NVidia Docker Toolkit
+    install_nvidia_docker_toolkit
 
     log_success "Fase inicial completada con éxito."
 }
