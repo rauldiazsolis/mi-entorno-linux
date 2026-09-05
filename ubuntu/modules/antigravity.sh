@@ -55,16 +55,21 @@ install_antigravity() {
     tar -xzf "$temp_tar" -C "$INSTALL_DIR" --strip-components=1
     rm -f "$temp_tar"
 
-    # 2. Configurar symlink global en el PATH
-    ln -sf "${INSTALL_DIR}/antigravity" /usr/local/bin/antigravity
+    # 2. Configurar symlinks en /usr/local/bin
+    local cli_bin="${INSTALL_DIR}/bin/antigravity-ide"
+    ln -sf "$cli_bin" /usr/local/bin/antigravity-ide
+    ln -sf "$cli_bin" /usr/local/bin/antigravity
 
     # 3. Crear lanzador de escritorio (.desktop)
+    local icon_path="${INSTALL_DIR}/resources/app/resources/linux/code.png"
+    [[ ! -f "$icon_path" ]] && icon_path="${INSTALL_DIR}/resources/app/resources/linux/antigravity.png"
+
     cat <<EOF > /usr/share/applications/antigravity.desktop
 [Desktop Entry]
 Name=Antigravity IDE
 Comment=Google Antigravity Standalone IDE
-Exec=/usr/local/bin/antigravity %F
-Icon=${INSTALL_DIR}/resources/app/resources/linux/code.png
+Exec=/usr/local/bin/antigravity-ide %F
+Icon=${icon_path}
 Type=Application
 StartupNotify=true
 Categories=Development;IDE;
@@ -72,11 +77,11 @@ MimeType=text/plain;inode/directory;
 EOF
     chmod 644 /usr/share/applications/antigravity.desktop
 
-    # 4. Instalar extensiones exclusivamente dentro de Antigravity IDE
+    # 4. Instalar extensiones para el usuario real
     log_info "Instalando extensiones dentro de Antigravity IDE para $TARGET_USER..."
     for ext in "${ANTIGRAVITY_EXTENSIONS[@]}"; do
         log_info "Instalando extensión: $ext..."
-        sudo -u "$TARGET_USER" /usr/local/bin/antigravity --install-extension "$ext" --force &>/dev/null || {
+        sudo -u "$TARGET_USER" /usr/local/bin/antigravity-ide --install-extension "$ext" --force &>/dev/null || {
             log_warn "No se pudo instalar $ext (puede añadirse luego desde el IDE)."
         }
     done
@@ -89,6 +94,7 @@ remove_antigravity() {
     log_info "Solicitada desinstalación de Antigravity IDE..."
 
     rm -rf "$INSTALL_DIR"
+    rm -f /usr/local/bin/antigravity-ide
     rm -f /usr/local/bin/antigravity
     rm -f /usr/share/applications/antigravity.desktop
     rm -rf "${TARGET_HOME}/.antigravity"
