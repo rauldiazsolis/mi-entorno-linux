@@ -18,9 +18,14 @@ CRED_FILE="${PORTAINER_CRED_DIR}/credentials.txt"
 install_portainer() {
     log_info "Verificando prerrequisitos para Portainer CE..."
 
-    # Validación directa contra el daemon de Docker
-    if ! command -v docker &>/dev/null || ! docker info &>/dev/null; then
-        log_error "Docker no parece estar corriendo o instalado. Ejecuta docker.sh primero."
+    # Validación sin operadores lógicos negados propensos a fallos con set -e
+    if ! command -v docker >/dev/null 2>&1; then
+        log_error "El binario 'docker' no está en el PATH. Ejecuta docker.sh primero."
+        exit 1
+    fi
+
+    if ! docker info >/dev/null 2>&1; then
+        log_error "El daemon de Docker no responde. Verifica que el servicio esté activo."
         exit 1
     fi
 
@@ -32,7 +37,7 @@ install_portainer() {
     # 2. Generar o recuperar contraseña
     local admin_pass=""
     if [[ -f "$CRED_FILE" ]]; then
-        admin_pass=$(grep "^PASSWORD=" "$CRED_FILE" | cut -d '=' -f2-)
+        admin_pass=$(grep "^PASSWORD=" "$CRED_FILE" | cut -d '=' -f2- || true)
     fi
 
     if [[ -z "$admin_pass" ]]; then
@@ -46,16 +51,15 @@ EOF
         chown "${TARGET_USER}:${TARGET_USER}" "$CRED_FILE"
     fi
 
-    # 3. Limpiar cualquier contenedor y volumen previo para forzar inicio limpio
+    # 3. Limpiar cualquier contenedor y volumen previo
     log_info "Limpiando instancias anteriores de Portainer..."
-    docker stop portainer &>/dev/null || true
-    docker rm portainer &>/dev/null || true
-    docker volume rm portainer_data &>/dev/null || true
-    docker volume create portainer_data &>/dev/null
+    docker stop portainer >/dev/null 2>&1 || true
+    docker rm portainer >/dev/null 2>&1 || true
+    docker volume rm portainer_data >/dev/null 2>&1 || true
+    docker volume create portainer_data >/dev/null 2>&1
 
     # 4. Generar hash bcrypt para Portainer
-    # Portainer acepta la contraseña hasheada directamente con --admin-password
-    log_info "Desplegando contenedor Portainer CE..."
+    log_info "Generando hash seguro y desplegando contenedor Portainer CE..."
     local pass_hash
     pass_hash=$(docker run --rm -i httpd:alpine htpasswd -nbB admin "$admin_pass" | cut -d ":" -f 2)
 
@@ -80,9 +84,9 @@ EOF
 
 remove_portainer() {
     log_info "Desinstalando Portainer CE..."
-    docker stop portainer &>/dev/null || true
-    docker rm portainer &>/dev/null || true
-    docker volume rm portainer_data &>/dev/null || true
+    docker stop portainer >/dev/null 2>&1 || true
+    docker rm portainer >/dev/null 2>&1 || true
+    docker volume rm portainer_data >/dev/null 2>&1 || true
     rm -rf "$PORTAINER_CRED_DIR"
 
     unset_state_var "MODULE_PORTAINER"
