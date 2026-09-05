@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ==============================================================================
-# antigravity.sh - Instalación directa de Antigravity IDE Standalone (v2.5.5)
+# antigravity.sh - Instalación de Antigravity IDE Standalone (v2.5.5)
 # ==============================================================================
 set -euo pipefail
 
@@ -13,6 +13,7 @@ load_state
 
 ACTION="${1:-install}"
 INSTALL_DIR="/opt/antigravity-ide"
+DESKTOP_FILE="/usr/share/applications/antigravity.desktop"
 
 # Extensiones estándar a configurar en Antigravity IDE
 ANTIGRAVITY_EXTENSIONS=(
@@ -60,11 +61,11 @@ install_antigravity() {
     ln -sf "$cli_bin" /usr/local/bin/antigravity-ide
     ln -sf "$cli_bin" /usr/local/bin/antigravity
 
-    # 3. Crear lanzador de escritorio (.desktop)
+    # 3. Crear lanzador de escritorio (.desktop) con StartupWMClass
     local icon_path="${INSTALL_DIR}/resources/app/resources/linux/code.png"
     [[ ! -f "$icon_path" ]] && icon_path="${INSTALL_DIR}/resources/app/resources/linux/antigravity.png"
 
-    cat <<EOF > /usr/share/applications/antigravity.desktop
+    cat <<EOF > "$DESKTOP_FILE"
 [Desktop Entry]
 Name=Antigravity IDE
 Comment=Google Antigravity Standalone IDE
@@ -72,16 +73,18 @@ Exec=/usr/local/bin/antigravity-ide %F
 Icon=${icon_path}
 Type=Application
 StartupNotify=true
+StartupWMClass=antigravity-ide
 Categories=Development;IDE;
 MimeType=text/plain;inode/directory;
 EOF
-    chmod 644 /usr/share/applications/antigravity.desktop
+    chmod 644 "$DESKTOP_FILE"
+    update-desktop-database /usr/share/applications >/dev/null 2>&1 || true
 
-    # 4. Instalar extensiones para el usuario real
+    # 4. Instalar extensiones para el usuario
     log_info "Instalando extensiones dentro de Antigravity IDE para $TARGET_USER..."
     for ext in "${ANTIGRAVITY_EXTENSIONS[@]}"; do
         log_info "Instalando extensión: $ext..."
-        sudo -u "$TARGET_USER" /usr/local/bin/antigravity-ide --install-extension "$ext" --force &>/dev/null || {
+        sudo -u "$TARGET_USER" /usr/local/bin/antigravity-ide --install-extension "$ext" --force >/dev/null 2>&1 || {
             log_warn "No se pudo instalar $ext (puede añadirse luego desde el IDE)."
         }
     done
@@ -91,12 +94,12 @@ EOF
 }
 
 remove_antigravity() {
-    log_info "Solicitada desinstalación de Antigravity IDE..."
-
+    log_info "Desinstalando Antigravity IDE Standalone..."
     rm -rf "$INSTALL_DIR"
     rm -f /usr/local/bin/antigravity-ide
     rm -f /usr/local/bin/antigravity
-    rm -f /usr/share/applications/antigravity.desktop
+    rm -f "$DESKTOP_FILE"
+    update-desktop-database /usr/share/applications >/dev/null 2>&1 || true
     rm -rf "${TARGET_HOME}/.antigravity"
 
     unset_state_var "MODULE_ANTIGRAVITY"
