@@ -17,7 +17,9 @@ ACTION="${1:-install}"
 GLOBAL_EXTENSIONS=(
     "ms-azuretools.vscode-docker"
     "ms-vscode-remote.remote-containers"
+    "continue.continue"
     "eamodio.gitlens"
+    "mermaidchart.vscode-mermaid-chart"
 )
 
 install_vscode() {
