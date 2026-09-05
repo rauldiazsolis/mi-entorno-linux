@@ -17,7 +17,6 @@ ACTION="${1:-install}"
 ANTIGRAVITY_EXTENSIONS=(
     "crsx.ag-usage"
     "ms-azuretools.vscode-docker"
-    "ms-vscode-remote.remote-containers"
     "mermaidchart.vscode-mermaid-chart"
     "dbaeumer.vscode-eslint"
     "esbenp.prettier-vscode"
