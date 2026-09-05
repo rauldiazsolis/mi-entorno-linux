@@ -20,6 +20,7 @@ ANTIGRAVITY_EXTENSIONS=(
     "mermaidchart.vscode-mermaid-chart"
     "dbaeumer.vscode-eslint"
     "esbenp.prettier-vscode"
+    "google.google-antigravity"
 )
 
 install_antigravity() {
