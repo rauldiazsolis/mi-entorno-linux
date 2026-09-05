@@ -66,14 +66,14 @@ Para desplegar el entorno completo en una instalación limpia de Ubuntu o en una
 Ejecución directa en una sola línea mediante `curl`:
 
 ```bash
-curl -fsSL [https://raw.githubusercontent.com/rauldiazsolis/mi-entorno-linux/main/bootstrap.sh](https://raw.githubusercontent.com/rauldiazsolis/mi-entorno-linux/main/bootstrap.sh) | sudo bash
+curl -fsSL https://raw.githubusercontent.com/rauldiazsolis/mi-entorno-linux/main/bootstrap.sh | sudo bash
 
 ```
 
 o mediante `wget`:
 
 ```bash
-wget -qO- [https://raw.githubusercontent.com/rauldiazsolis/mi-entorno-linux/main/bootstrap.sh](https://raw.githubusercontent.com/rauldiazsolis/mi-entorno-linux/main/bootstrap.sh) | sudo bash
+wget -qO- https://raw.githubusercontent.com/rauldiazsolis/mi-entorno-linux/main/bootstrap.sh | sudo bash
 
 ```
 
@@ -82,7 +82,7 @@ wget -qO- [https://raw.githubusercontent.com/rauldiazsolis/mi-entorno-linux/main
 Si ya has clonado el repositorio:
 
 ```bash
-git clone [https://github.com/rauldiazsolis/mi-entorno-linux.git](https://github.com/rauldiazsolis/mi-entorno-linux.git)
+git clone https://github.com/rauldiazsolis/mi-entorno-linux.git
 cd mi-entorno-linux
 
 # 1. Despliegue integral
