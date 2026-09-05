@@ -18,7 +18,6 @@ CRED_FILE="${PORTAINER_CRED_DIR}/credentials.txt"
 install_portainer() {
     log_info "Verificando prerrequisitos para Portainer CE..."
 
-    # Validación sin operadores lógicos negados propensos a fallos con set -e
     if ! command -v docker >/dev/null 2>&1; then
         log_error "El binario 'docker' no está en el PATH. Ejecuta docker.sh primero."
         exit 1
@@ -29,7 +28,7 @@ install_portainer() {
         exit 1
     fi
 
-    # 1. Preparar directorio seguro para guardar las credenciales
+    # 1. Preparar directorio seguro para credenciales
     mkdir -p "$PORTAINER_CRED_DIR"
     chmod 700 "$PORTAINER_CRED_DIR"
     chown -R "${TARGET_USER}:${TARGET_USER}" "$PORTAINER_CRED_DIR"
@@ -41,7 +40,12 @@ install_portainer() {
     fi
 
     if [[ -z "$admin_pass" ]]; then
-        admin_pass=$(tr -dc 'A-Za-z0-9' < /dev/urandom | head -c 24)
+        # Generación a prueba de SIGPIPE/pipefail usando openssl
+        admin_pass=$(openssl rand -base64 18 | tr -dc 'A-Za-z0-9' || true)
+        if [[ -z "$admin_pass" ]]; then
+            admin_pass=$(head -c 24 /dev/urandom | base64 | tr -dc 'A-Za-z0-9' | head -c 20 || true)
+        fi
+
         cat <<EOF > "$CRED_FILE"
 URL=https://localhost:9443
 USER=admin
@@ -51,18 +55,19 @@ EOF
         chown "${TARGET_USER}:${TARGET_USER}" "$CRED_FILE"
     fi
 
-    # 3. Limpiar cualquier contenedor y volumen previo
+    # 3. Limpiar instancias previas
     log_info "Limpiando instancias anteriores de Portainer..."
     docker stop portainer >/dev/null 2>&1 || true
     docker rm portainer >/dev/null 2>&1 || true
     docker volume rm portainer_data >/dev/null 2>&1 || true
     docker volume create portainer_data >/dev/null 2>&1
 
-    # 4. Generar hash bcrypt para Portainer
-    log_info "Generando hash seguro y desplegando contenedor Portainer CE..."
+    # 4. Generar hash bcrypt y levantar Portainer
+    log_info "Generando hash seguro de contraseña..."
     local pass_hash
     pass_hash=$(docker run --rm -i httpd:alpine htpasswd -nbB admin "$admin_pass" | cut -d ":" -f 2)
 
+    log_info "Iniciando contenedor Portainer CE..."
     docker run -d \
         --name portainer \
         --restart=always \
@@ -73,7 +78,7 @@ EOF
         --admin-password="$pass_hash"
 
     set_state_var "MODULE_PORTAINER" "installed"
-    log_success "Portainer CE configurado e iniciado."
+    log_success "Portainer CE configurado e iniciado con éxito."
     echo "========================================================"
     echo " URL:         https://localhost:9443"
     echo " Usuario:     admin"
