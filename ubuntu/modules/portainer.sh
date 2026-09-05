@@ -17,12 +17,17 @@ CRED_FILE="${PORTAINER_CRED_DIR}/credentials.txt"
 
 install_portainer() {
     log_info "Verificando prerrequisitos para Portainer CE..."
-    require_state "MODULE_DOCKER" "installed" "docker.sh"
 
-    # 1. Preparar directorio de credenciales seguro
+    # Validación directa contra el daemon de Docker
+    if ! command -v docker &>/dev/null || ! docker info &>/dev/null; then
+        log_error "Docker no parece estar corriendo o instalado. Ejecuta docker.sh primero."
+        exit 1
+    fi
+
+    # 1. Preparar directorio seguro para guardar las credenciales
     mkdir -p "$PORTAINER_CRED_DIR"
-    chown -R "${TARGET_USER}:${TARGET_USER}" "$PORTAINER_CRED_DIR"
     chmod 700 "$PORTAINER_CRED_DIR"
+    chown -R "${TARGET_USER}:${TARGET_USER}" "$PORTAINER_CRED_DIR"
 
     # 2. Generar o recuperar contraseña
     local admin_pass=""
@@ -31,54 +36,46 @@ install_portainer() {
     fi
 
     if [[ -z "$admin_pass" ]]; then
-        # Generar contraseña segura de 24 caracteres alfanuméricos
         admin_pass=$(tr -dc 'A-Za-z0-9' < /dev/urandom | head -c 24)
         cat <<EOF > "$CRED_FILE"
 URL=https://localhost:9443
 USER=admin
 PASSWORD=${admin_pass}
 EOF
-        chown "${TARGET_USER}:${TARGET_USER}" "$CRED_FILE"
         chmod 600 "$CRED_FILE"
+        chown "${TARGET_USER}:${TARGET_USER}" "$CRED_FILE"
     fi
 
-    # 3. Preparar archivo de contraseña temporal para Portainer
-    local pass_tmp="/tmp/portainer_init_pass"
-    echo -n "$admin_pass" > "$pass_tmp"
-    chmod 600 "$pass_tmp"
-
-    # 4. Remover contenedor y volumen previo si existiera para garantizar primer inicio limpio
-    if docker ps -a --format '{{.Names}}' | grep -Eq "^portainer$"; then
-        log_info "Removiendo instancia previa de Portainer..."
-        docker stop portainer &>/dev/null || true
-        docker rm portainer &>/dev/null || true
-    fi
-
-    # Si se desea regenerar desde cero el volumen para aplicar la contraseña automática
+    # 3. Limpiar cualquier contenedor y volumen previo para forzar inicio limpio
+    log_info "Limpiando instancias anteriores de Portainer..."
+    docker stop portainer &>/dev/null || true
+    docker rm portainer &>/dev/null || true
     docker volume rm portainer_data &>/dev/null || true
     docker volume create portainer_data &>/dev/null
 
-    log_info "Desplegando contenedor Portainer CE con credenciales automáticas..."
+    # 4. Generar hash bcrypt para Portainer
+    # Portainer acepta la contraseña hasheada directamente con --admin-password
+    log_info "Desplegando contenedor Portainer CE..."
+    local pass_hash
+    pass_hash=$(docker run --rm -i httpd:alpine htpasswd -nbB admin "$admin_pass" | cut -d ":" -f 2)
+
     docker run -d \
         --name portainer \
         --restart=always \
         -p 127.0.0.1:9443:9443 \
         -v /var/run/docker.sock:/var/run/docker.sock \
         -v portainer_data:/data \
-        -v "${pass_tmp}:/tmp/portainer_init_pass:ro" \
         portainer/portainer-ce:latest \
-        --admin-password-file=/tmp/portainer_init_pass
-
-    # Limpiar archivo temporal
-    rm -f "$pass_tmp"
+        --admin-password="$pass_hash"
 
     set_state_var "MODULE_PORTAINER" "installed"
-    log_success "Portainer CE instalado y configurado con éxito."
-    echo "--------------------------------------------------------"
-    echo " Acceso: https://localhost:9443"
-    echo " Usuario: admin"
-    echo " Contraseña guardada en: $CRED_FILE"
-    echo "--------------------------------------------------------"
+    log_success "Portainer CE configurado e iniciado."
+    echo "========================================================"
+    echo " URL:         https://localhost:9443"
+    echo " Usuario:     admin"
+    echo " Contraseña:  ${admin_pass}"
+    echo " Guardada en: ${CRED_FILE}"
+    echo "========================================================"
 }
 
 remove_portainer() {
